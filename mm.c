@@ -72,7 +72,7 @@ static void *coalesce(void *);
 static void *find_fit(size_t);
 static void place(void *, size_t);
 static void *heap_listp;
-
+static void *l_bp; //next_fit(lestest allocated block pointer)
 
 /* 
  * mm_init - initialize the malloc package.
@@ -91,6 +91,7 @@ int mm_init(void)
 	/* Extend the empty heap with a free block of CHUNKSIZE bytes */
 	if(extend_heap(CHUNKSIZE/WSIZE) == NULL)
 		return -1;
+	l_bp = heap_listp;
 	return 0;
 }
 
@@ -102,7 +103,7 @@ void *mm_malloc(size_t size)
 {
 	size_t asize;				/* Adjusted block size */
 	size_t extendsize;	/* Amount to extend heap if no fit */
-	char *bp;
+	void *bp;
 
 	/* Ignore spurious requests */
 	if(size == 0)
@@ -117,6 +118,7 @@ void *mm_malloc(size_t size)
 	/* Search the free list for a fit */
 	if((bp = find_fit(asize)) != NULL){
 		place(bp, asize);
+		l_bp = bp;
 		return bp;
 	}
 
@@ -125,6 +127,7 @@ void *mm_malloc(size_t size)
 	if((bp = extend_heap(extendsize/WSIZE)) == NULL)
 		return NULL;
 	place(bp, asize);
+	l_bp = bp;
 	return bp;
 }
 
@@ -160,7 +163,9 @@ void *mm_realloc(void *ptr, size_t size)
 	if(size < oldsize){
 		oldsize = size; 
 	}
+
 	memcpy(newp, ptr, oldsize); 
+	
 	mm_free(ptr);
 	return newp;
 }
@@ -192,6 +197,7 @@ static void *coalesce(void *bp)
 	size_t size       = GET_SIZE(HDRP(bp));
 
 	if(prev_alloc && next_alloc){					/* Case 1 */
+		l_bp = bp;
 		return bp;
 	}
 
@@ -214,13 +220,35 @@ static void *coalesce(void *bp)
 		PUT(FTRP(NEXT_BLKP(bp)), PACK(size, 0));
 		bp = PREV_BLKP(bp);
 	}
+	l_bp = bp;
 	return bp;
 }
 
 static void *find_fit(size_t asize){
+	/* first_fit
 	void *bp;
 	for(bp = heap_listp;  GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)){
 		if(!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp)))){
+			return bp;
+		}
+	}
+	return NULL;
+	*/
+	/* next fit  */
+	void *bp = l_bp;
+	for(bp = NEXT_BLKP(bp);  GET_SIZE(HDRP(bp)) != 0; bp = NEXT_BLKP(bp)){
+		if(!GET_ALLOC(HDRP(bp)) && GET_SIZE(HDRP(bp)) >= asize){
+			l_bp = bp;
+			return bp;
+		}
+	}
+
+	bp = heap_listp;
+
+	while(bp< l_bp){
+		bp = NEXT_BLKP(bp);
+		if(!GET_ALLOC(HDRP(bp)) && GET_SIZE(HDRP(bp)) >= asize){
+			l_bp = bp;
 			return bp;
 		}
 	}
